@@ -1,7 +1,6 @@
 package resources
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
@@ -10,8 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"os/exec"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -36,7 +33,6 @@ type testExecResource struct {
 type testExecResourceModel struct {
 	Id       types.String `tfsdk:"id"`
 	FileName types.String `tfsdk:"file_name"`
-	Output   types.String `tfsdk:"output"`
 }
 
 // Metadata はリソース タイプ名を返します。
@@ -54,10 +50,7 @@ func (r *testExecResource) Schema (_ context.Context , _ resource.SchemaRequest 
 			"file_name": schema.StringAttribute {
 				Optional: true,
 				Computed: true,
-				Default: stringdefault.StaticString("/"),
-			},
-			"output": schema.StringAttribute {
-				Computed: true,
+				Default: stringdefault.StaticString("/test_file"),
 			},
 		},
 	} 
@@ -85,30 +78,13 @@ func (r *testExecResource) Create (ctx context.Context , req resource.CreateRequ
 	defer session.Close()
 
 	// リモートでコマンドの実行
-	cmd := exec.Command("ls", plan.FileName.ValueString())
-
-	// 出力をキャプチャするためのバッファ(そのままだと外部実行したログがこちらからわからないから)
-    var stdoutBuf, stderrBuf bytes.Buffer
-    // StdoutとStderrにバッファを割り当てる
-    cmd.Stdout = &stdoutBuf
-    cmd.Stderr = &stderrBuf
-
-	// コマンドを実行
-    err = cmd.Run()
-    
-    // Stdoutの内容を表示
-    fmt.Println("Stdout:")
-    fmt.Println(stdoutBuf.String())
+	err = session.Run("touch " + plan.FileName.ValueString())
 
 	if err != nil {
-		fmt.Printf("Stdout: %v\n", err)
-		fmt.Println("Stderr:")
-        fmt.Println(stderrBuf.String())
+		fmt.Printf("Stderr: %v\n", err)
 	}
-
 	// stateの作成結果を追加
 	plan.Id = types.StringValue(uuid.NewString())
-	plan.Output = types.StringValue(stdoutBuf.String())
 
 	// stateをセット
     diags = resp.State.Set(ctx, plan)
